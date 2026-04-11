@@ -1,0 +1,595 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Max Admin — TekStack</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --blue: #0052cc; --blue-dark: #0041a8; --blue-light: #e8f0ff;
+    --green: #10b981; --red: #ef4444; --yellow: #f59e0b;
+    --gray-50: #f9fafb; --gray-100: #f3f4f6; --gray-200: #e5e7eb;
+    --gray-500: #6b7280; --gray-700: #374151; --gray-900: #111827;
+    --radius: 10px; --shadow: 0 1px 3px rgba(0,0,0,.1), 0 1px 2px rgba(0,0,0,.06);
+  }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: var(--gray-50); color: var(--gray-900); min-height: 100vh; }
+
+  /* Layout */
+  .layout { display: flex; min-height: 100vh; }
+  .sidebar { width: 230px; background: #1a1f36; flex-shrink: 0; display: flex; flex-direction: column; }
+  .main { flex: 1; overflow-x: hidden; }
+
+  /* Sidebar */
+  .sidebar-logo { padding: 24px 20px 16px; color: white; font-size: 18px; font-weight: 700; border-bottom: 1px solid rgba(255,255,255,.08); }
+  .sidebar-logo span { color: #60a5fa; }
+  .sidebar-nav { padding: 12px 0; }
+  .nav-item { display: flex; align-items: center; gap: 10px; padding: 10px 20px; color: rgba(255,255,255,.65); cursor: pointer; font-size: 14px; font-weight: 500; transition: all .15s; border-left: 3px solid transparent; }
+  .nav-item:hover { background: rgba(255,255,255,.06); color: white; }
+  .nav-item.active { background: rgba(96,165,250,.12); color: #60a5fa; border-left-color: #60a5fa; }
+  .nav-item .icon { width: 18px; flex-shrink: 0; }
+
+  /* Topbar */
+  .topbar { background: white; border-bottom: 1px solid var(--gray-200); padding: 14px 28px; display: flex; align-items: center; justify-content: space-between; }
+  .topbar h1 { font-size: 20px; font-weight: 700; color: var(--gray-900); }
+  .topbar-right { display: flex; align-items: center; gap: 12px; }
+
+  /* Auth */
+  #auth-screen { position: fixed; inset: 0; background: var(--gray-50); display: flex; align-items: center; justify-content: center; z-index: 1000; }
+  .auth-card { background: white; border-radius: 16px; padding: 40px; width: 360px; box-shadow: 0 4px 24px rgba(0,0,0,.1); }
+  .auth-card h2 { font-size: 22px; margin-bottom: 8px; }
+  .auth-card p { color: var(--gray-500); font-size: 14px; margin-bottom: 24px; }
+
+  /* Cards & Sections */
+  .content { padding: 28px; }
+  .page { display: none; }
+  .page.active { display: block; }
+  .card { background: white; border-radius: var(--radius); box-shadow: var(--shadow); overflow: hidden; }
+  .card-header { padding: 16px 20px; border-bottom: 1px solid var(--gray-100); display: flex; align-items: center; justify-content: space-between; }
+  .card-header h2 { font-size: 16px; font-weight: 600; }
+  .card-body { padding: 20px; }
+
+  /* Stats row */
+  .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 24px; }
+  .stat { background: white; border-radius: var(--radius); padding: 20px; box-shadow: var(--shadow); }
+  .stat-label { font-size: 12px; color: var(--gray-500); text-transform: uppercase; letter-spacing: .05em; margin-bottom: 6px; }
+  .stat-value { font-size: 28px; font-weight: 700; color: var(--gray-900); }
+  .stat-sub { font-size: 12px; color: var(--gray-500); margin-top: 4px; }
+
+  /* Tables */
+  table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  th { text-align: left; padding: 10px 16px; font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--gray-500); border-bottom: 1px solid var(--gray-100); font-weight: 600; background: var(--gray-50); }
+  td { padding: 12px 16px; border-bottom: 1px solid var(--gray-100); vertical-align: middle; }
+  tr:last-child td { border-bottom: none; }
+  tr:hover td { background: var(--gray-50); }
+
+  /* Badges */
+  .badge { display: inline-flex; align-items: center; padding: 3px 9px; border-radius: 20px; font-size: 11px; font-weight: 600; }
+  .badge-green { background: #d1fae5; color: #065f46; }
+  .badge-blue { background: #dbeafe; color: #1e40af; }
+  .badge-gray { background: var(--gray-100); color: var(--gray-700); }
+  .badge-yellow { background: #fef3c7; color: #92400e; }
+
+  /* Buttons */
+  .btn { padding: 8px 16px; border-radius: 8px; border: none; cursor: pointer; font-size: 13px; font-weight: 600; transition: all .15s; display: inline-flex; align-items: center; gap: 6px; }
+  .btn-primary { background: var(--blue); color: white; }
+  .btn-primary:hover { background: var(--blue-dark); }
+  .btn-sm { padding: 5px 10px; font-size: 12px; border-radius: 6px; }
+  .btn-danger { background: #fee2e2; color: var(--red); }
+  .btn-danger:hover { background: #fecaca; }
+  .btn-ghost { background: transparent; color: var(--gray-700); border: 1px solid var(--gray-200); }
+  .btn-ghost:hover { background: var(--gray-50); }
+  .btn-success { background: #d1fae5; color: #065f46; }
+  .btn-success:hover { background: #a7f3d0; }
+
+  /* Forms */
+  .form-group { margin-bottom: 16px; }
+  .form-group label { display: block; font-size: 13px; font-weight: 500; margin-bottom: 6px; color: var(--gray-700); }
+  .form-group input, .form-group textarea, .form-group select {
+    width: 100%; padding: 9px 12px; border: 1px solid var(--gray-200); border-radius: 8px;
+    font-size: 14px; color: var(--gray-900); background: white; outline: none; font-family: inherit;
+    transition: border-color .15s;
+  }
+  .form-group input:focus, .form-group textarea:focus { border-color: var(--blue); box-shadow: 0 0 0 3px rgba(0,82,204,.08); }
+  .form-group textarea { resize: vertical; min-height: 80px; }
+
+  /* Conversation detail */
+  #conv-detail-panel { position: fixed; inset: 0; background: rgba(0,0,0,.4); z-index: 200; display: none; align-items: center; justify-content: center; }
+  #conv-detail-panel.open { display: flex; }
+  .detail-card { background: white; width: 640px; max-height: 85vh; border-radius: 16px; display: flex; flex-direction: column; overflow: hidden; }
+  .detail-header { padding: 20px 24px; border-bottom: 1px solid var(--gray-100); display: flex; align-items: center; justify-content: space-between; }
+  .detail-header h3 { font-size: 16px; font-weight: 600; }
+  .detail-messages { flex: 1; overflow-y: auto; padding: 20px 24px; display: flex; flex-direction: column; gap: 12px; }
+  .detail-msg { padding: 10px 14px; border-radius: 12px; font-size: 14px; line-height: 1.5; max-width: 80%; }
+  .detail-msg.user { background: var(--blue); color: white; align-self: flex-end; border-bottom-right-radius: 4px; }
+  .detail-msg.assistant { background: var(--gray-100); color: var(--gray-900); align-self: flex-start; border-bottom-left-radius: 4px; }
+  .detail-meta { padding: 12px 24px; border-top: 1px solid var(--gray-100); font-size: 12px; color: var(--gray-500); }
+
+  /* Scrape log */
+  #scrape-log { background: #111; color: #4ade80; font-family: monospace; font-size: 12px; padding: 12px; border-radius: 8px; height: 160px; overflow-y: auto; white-space: pre-wrap; }
+
+  /* Empty state */
+  .empty { text-align: center; padding: 48px 20px; color: var(--gray-500); }
+  .empty svg { width: 48px; height: 48px; margin: 0 auto 12px; opacity: .4; }
+  .empty p { font-size: 14px; }
+
+  /* Misc */
+  .section-title { font-size: 15px; font-weight: 600; margin-bottom: 16px; color: var(--gray-700); }
+  .flex { display: flex; }
+  .gap-2 { gap: 8px; }
+  .mt-4 { margin-top: 16px; }
+  .mt-6 { margin-top: 24px; }
+  .text-sm { font-size: 13px; }
+  .text-xs { font-size: 11px; }
+  .text-gray { color: var(--gray-500); }
+  .truncate { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 240px; }
+  .spinner { width: 18px; height: 18px; border: 2px solid var(--gray-200); border-top-color: var(--blue); border-radius: 50%; animation: spin .7s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+</style>
+</head>
+<body>
+
+<!-- Auth Screen -->
+<div id="auth-screen">
+  <div class="auth-card">
+    <h2>Max Admin</h2>
+    <p>Enter your admin password to continue.</p>
+    <div class="form-group">
+      <label>Password</label>
+      <input type="password" id="auth-password" placeholder="Enter password">
+    </div>
+    <button class="btn btn-primary" style="width:100%" onclick="doLogin()">Sign in</button>
+    <p id="auth-error" style="color:var(--red);font-size:13px;margin-top:10px;display:none">Incorrect password.</p>
+  </div>
+</div>
+
+<!-- Main Layout -->
+<div class="layout" id="app" style="display:none">
+  <aside class="sidebar">
+    <div class="sidebar-logo">Max <span>Admin</span></div>
+    <nav class="sidebar-nav">
+      <div class="nav-item active" data-page="dashboard" onclick="navigate('dashboard', this)">
+        <svg class="icon" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/></svg>
+        Dashboard
+      </div>
+      <div class="nav-item" data-page="conversations" onclick="navigate('conversations', this)">
+        <svg class="icon" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"/></svg>
+        Conversations
+      </div>
+      <div class="nav-item" data-page="leads" onclick="navigate('leads', this)">
+        <svg class="icon" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0"/></svg>
+        Leads
+      </div>
+      <div class="nav-item" data-page="training" onclick="navigate('training', this)">
+        <svg class="icon" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/></svg>
+        Training
+      </div>
+      <div class="nav-item" data-page="knowledge" onclick="navigate('knowledge', this)">
+        <svg class="icon" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"/></svg>
+        Knowledge
+      </div>
+    </nav>
+  </aside>
+
+  <div class="main">
+    <!-- Dashboard -->
+    <div id="page-dashboard" class="page active">
+      <div class="topbar"><h1>Dashboard</h1><div class="topbar-right"><span class="text-sm text-gray" id="dash-updated"></span></div></div>
+      <div class="content">
+        <div class="stats" id="stats-row">
+          <div class="stat"><div class="stat-label">Conversations</div><div class="stat-value" id="stat-convos">—</div></div>
+          <div class="stat"><div class="stat-label">Total Messages</div><div class="stat-value" id="stat-msgs">—</div></div>
+          <div class="stat"><div class="stat-label">Leads Captured</div><div class="stat-value" id="stat-leads">—</div></div>
+          <div class="stat"><div class="stat-label">Leads Contacted</div><div class="stat-value" id="stat-contacted">—</div></div>
+        </div>
+        <div class="card">
+          <div class="card-header"><h2>Recent Conversations</h2><button class="btn btn-ghost btn-sm" onclick="navigate('conversations', document.querySelector('[data-page=conversations]'))">View all →</button></div>
+          <table id="recent-convos-table"><thead><tr><th>Visitor</th><th>Page</th><th>Messages</th><th>Date</th><th></th></tr></thead><tbody id="recent-convos-body"></tbody></table>
+        </div>
+      </div>
+    </div>
+
+    <!-- Conversations -->
+    <div id="page-conversations" class="page">
+      <div class="topbar"><h1>Conversations</h1><div class="topbar-right"><button class="btn btn-ghost btn-sm" onclick="loadConversations()">↻ Refresh</button></div></div>
+      <div class="content">
+        <div class="card">
+          <div class="card-header"><h2>All Conversations</h2><span class="text-sm text-gray" id="convo-count"></span></div>
+          <table><thead><tr><th>Visitor</th><th>Email</th><th>Company</th><th>Page URL</th><th>Msgs</th><th>Last Active</th><th></th></tr></thead><tbody id="convos-body"></tbody></table>
+        </div>
+      </div>
+    </div>
+
+    <!-- Leads -->
+    <div id="page-leads" class="page">
+      <div class="topbar"><h1>Leads</h1><div class="topbar-right"><button class="btn btn-primary btn-sm" onclick="exportLeads()">↓ Export CSV</button></div></div>
+      <div class="content">
+        <div class="card">
+          <div class="card-header"><h2>All Leads</h2><span class="text-sm text-gray" id="leads-count"></span></div>
+          <table><thead><tr><th>Name</th><th>Company</th><th>Email</th><th>Best Time</th><th>Date</th><th>Status</th><th></th></tr></thead><tbody id="leads-body"></tbody></table>
+        </div>
+      </div>
+    </div>
+
+    <!-- Training -->
+    <div id="page-training" class="page">
+      <div class="topbar"><h1>Training Overrides</h1></div>
+      <div class="content">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px">
+          <div class="card">
+            <div class="card-header"><h2>Add Override</h2></div>
+            <div class="card-body">
+              <p class="text-sm text-gray" style="margin-bottom:16px">Define a question pattern and Max will always use your preferred response for matching questions.</p>
+              <div class="form-group">
+                <label>Question Pattern (keywords or phrase)</label>
+                <input type="text" id="train-pattern" placeholder="e.g. pricing, how much does it cost">
+              </div>
+              <div class="form-group">
+                <label>Preferred Response</label>
+                <textarea id="train-response" rows="5" placeholder="Write the exact response Max should give..."></textarea>
+              </div>
+              <button class="btn btn-primary" onclick="addTrainingOverride()">Save Override</button>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-header"><h2>Existing Overrides</h2><button class="btn btn-ghost btn-sm" onclick="loadTraining()">↻</button></div>
+            <div id="overrides-list" style="padding:0">
+              <div class="empty"><p>No overrides yet.</p></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Knowledge -->
+    <div id="page-knowledge" class="page">
+      <div class="topbar"><h1>Knowledge Base</h1></div>
+      <div class="content">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-bottom:24px">
+          <div class="card">
+            <div class="card-header"><h2>Scrape TekStack Website</h2></div>
+            <div class="card-body">
+              <p class="text-sm text-gray" style="margin-bottom:16px">Automatically pull all content from tekstack.com and add it to Max's knowledge base. Replaces previous scraped content.</p>
+              <button class="btn btn-primary" id="scrape-btn" onclick="triggerScrape()">Start Scrape</button>
+              <div id="scrape-log" style="margin-top:16px;display:none"></div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-header"><h2>Add Manual Entry</h2></div>
+            <div class="card-body">
+              <div class="form-group"><label>Title</label><input type="text" id="know-title" placeholder="e.g. Pricing FAQ"></div>
+              <div class="form-group"><label>Content</label><textarea id="know-content" rows="4" placeholder="Paste product info, FAQs, pricing details..."></textarea></div>
+              <div class="form-group"><label>Source URL (optional)</label><input type="text" id="know-url" placeholder="https://..."></div>
+              <button class="btn btn-primary" onclick="addKnowledge()">Add to Knowledge Base</button>
+            </div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-header"><h2>Knowledge Entries</h2><button class="btn btn-ghost btn-sm" onclick="loadKnowledge()">↻ Refresh</button></div>
+          <table><thead><tr><th>Title / Source</th><th>Type</th><th>Size</th><th>Status</th><th>Date</th><th></th></tr></thead><tbody id="knowledge-body"></tbody></table>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Conversation Detail Panel -->
+<div id="conv-detail-panel" onclick="closeDetail(event)">
+  <div class="detail-card">
+    <div class="detail-header">
+      <div>
+        <h3 id="detail-title">Conversation</h3>
+        <div class="text-xs text-gray" id="detail-meta" style="margin-top:4px"></div>
+      </div>
+      <button class="btn btn-ghost btn-sm" onclick="closeDetailPanel()">✕ Close</button>
+    </div>
+    <div class="detail-messages" id="detail-messages"></div>
+    <div class="detail-meta">
+      <button class="btn btn-sm btn-ghost" onclick="copyConvoToTraining()" id="train-from-convo-btn">+ Use as training example</button>
+    </div>
+  </div>
+</div>
+
+<script>
+  const API = '';  // Same origin
+  let adminPassword = '';
+  let allLeads = [];
+  let currentConvoForTraining = null;
+
+  // ── Auth ─────────────────────────────────────────────────────────────────────
+  function doLogin() {
+    const pw = document.getElementById('auth-password').value;
+    if (!pw) return;
+    adminPassword = pw;
+    // Test with a real API call
+    apiFetch('/api/conversations').then(() => {
+      document.getElementById('auth-screen').style.display = 'none';
+      document.getElementById('app').style.display = 'flex';
+      navigate('dashboard', document.querySelector('[data-page=dashboard]'));
+    }).catch(() => {
+      document.getElementById('auth-error').style.display = 'block';
+      adminPassword = '';
+    });
+  }
+
+  document.getElementById('auth-password').addEventListener('keydown', e => {
+    if (e.key === 'Enter') doLogin();
+  });
+
+  // ── API helper ────────────────────────────────────────────────────────────────
+  async function apiFetch(path, options = {}) {
+    const res = await fetch(path, {
+      ...options,
+      headers: { 'X-Admin-Password': adminPassword, 'Content-Type': 'application/json', ...(options.headers || {}) },
+    });
+    if (!res.ok) throw new Error(res.status);
+    return res.json();
+  }
+
+  // ── Navigation ────────────────────────────────────────────────────────────────
+  function navigate(page, navEl) {
+    document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+    document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+    document.getElementById('page-' + page).classList.add('active');
+    if (navEl) navEl.classList.add('active');
+    const loaders = { dashboard: loadDashboard, conversations: loadConversations, leads: loadLeads, training: loadTraining, knowledge: loadKnowledge };
+    if (loaders[page]) loaders[page]();
+  }
+
+  // ── Date helper ───────────────────────────────────────────────────────────────
+  function fmtDate(str) {
+    if (!str) return '—';
+    const d = new Date(str.replace(' ', 'T') + 'Z');
+    return d.toLocaleDateString() + ' ' + d.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'});
+  }
+
+  // ── Dashboard ─────────────────────────────────────────────────────────────────
+  async function loadDashboard() {
+    const [convos, leads] = await Promise.all([
+      apiFetch('/api/conversations'),
+      apiFetch('/api/leads'),
+    ]);
+    document.getElementById('stat-convos').textContent = convos.length;
+    document.getElementById('stat-msgs').textContent = convos.reduce((a, c) => a + c.message_count, 0);
+    document.getElementById('stat-leads').textContent = leads.length;
+    document.getElementById('stat-contacted').textContent = leads.filter(l => l.contacted).length;
+    document.getElementById('dash-updated').textContent = 'Updated ' + new Date().toLocaleTimeString();
+
+    const tbody = document.getElementById('recent-convos-body');
+    tbody.innerHTML = '';
+    convos.slice(0, 10).forEach(c => {
+      tbody.innerHTML += `<tr>
+        <td>${c.visitor_name || '<span class="text-gray">Anonymous</span>'}</td>
+        <td><span class="truncate text-sm text-gray">${c.page_url || '—'}</span></td>
+        <td>${c.message_count}</td>
+        <td class="text-xs text-gray">${fmtDate(c.updated_at)}</td>
+        <td><button class="btn btn-ghost btn-sm" onclick="viewConversation('${c.id}')">View</button></td>
+      </tr>`;
+    });
+    if (!convos.length) tbody.innerHTML = '<tr><td colspan="5" class="empty"><p>No conversations yet.</p></td></tr>';
+  }
+
+  // ── Conversations ─────────────────────────────────────────────────────────────
+  async function loadConversations() {
+    const data = await apiFetch('/api/conversations');
+    document.getElementById('convo-count').textContent = data.length + ' total';
+    const tbody = document.getElementById('convos-body');
+    tbody.innerHTML = '';
+    data.forEach(c => {
+      tbody.innerHTML += `<tr>
+        <td>${c.visitor_name || '<span class="text-gray">Anonymous</span>'}</td>
+        <td class="text-sm">${c.visitor_email || '—'}</td>
+        <td class="text-sm">${c.visitor_company || '—'}</td>
+        <td><span class="truncate text-xs text-gray" style="display:block">${c.page_url || '—'}</span></td>
+        <td>${c.message_count}</td>
+        <td class="text-xs text-gray">${fmtDate(c.updated_at)}</td>
+        <td><button class="btn btn-ghost btn-sm" onclick="viewConversation('${c.id}')">View</button></td>
+      </tr>`;
+    });
+    if (!data.length) tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:40px;color:var(--gray-500)">No conversations yet.</td></tr>';
+  }
+
+  async function viewConversation(id) {
+    const data = await apiFetch('/api/conversations/' + id);
+    currentConvoForTraining = data;
+    document.getElementById('detail-title').textContent = data.visitor_name || 'Anonymous Visitor';
+    document.getElementById('detail-meta').textContent =
+      (data.visitor_email ? data.visitor_email + ' · ' : '') +
+      (data.visitor_company ? data.visitor_company + ' · ' : '') +
+      fmtDate(data.created_at);
+    const msgs = document.getElementById('detail-messages');
+    msgs.innerHTML = '';
+    data.messages.forEach(m => {
+      const div = document.createElement('div');
+      div.className = 'detail-msg ' + m.role;
+      div.textContent = m.content;
+      msgs.appendChild(div);
+    });
+    setTimeout(() => msgs.scrollTop = msgs.scrollHeight, 50);
+    document.getElementById('conv-detail-panel').classList.add('open');
+  }
+
+  function closeDetailPanel() {
+    document.getElementById('conv-detail-panel').classList.remove('open');
+  }
+
+  function closeDetail(e) {
+    if (e.target === document.getElementById('conv-detail-panel')) closeDetailPanel();
+  }
+
+  function copyConvoToTraining() {
+    if (!currentConvoForTraining) return;
+    const msgs = currentConvoForTraining.messages;
+    const last = msgs.filter(m => m.role === 'user').pop();
+    const lastResp = msgs.filter(m => m.role === 'assistant').pop();
+    if (last) document.getElementById('train-pattern').value = last.content.substring(0, 120);
+    if (lastResp) document.getElementById('train-response').value = lastResp.content;
+    closeDetailPanel();
+    navigate('training', document.querySelector('[data-page=training]'));
+  }
+
+  // ── Leads ─────────────────────────────────────────────────────────────────────
+  async function loadLeads() {
+    allLeads = await apiFetch('/api/leads');
+    document.getElementById('leads-count').textContent = allLeads.length + ' total · ' + allLeads.filter(l=>l.contacted).length + ' contacted';
+    renderLeads();
+  }
+
+  function renderLeads() {
+    const tbody = document.getElementById('leads-body');
+    tbody.innerHTML = '';
+    allLeads.forEach(l => {
+      tbody.innerHTML += `<tr>
+        <td><strong>${l.name}</strong></td>
+        <td>${l.company || '—'}</td>
+        <td><a href="mailto:${l.email}">${l.email}</a></td>
+        <td class="text-sm">${l.preferred_time || '—'}</td>
+        <td class="text-xs text-gray">${fmtDate(l.created_at)}</td>
+        <td>${l.contacted ? '<span class="badge badge-green">Contacted</span>' : '<span class="badge badge-yellow">New</span>'}</td>
+        <td>${!l.contacted ? `<button class="btn btn-sm btn-success" onclick="markContacted(${l.id}, this)">✓ Mark contacted</button>` : ''}</td>
+      </tr>`;
+    });
+    if (!allLeads.length) tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:40px;color:var(--gray-500)">No leads yet — Max will capture them automatically.</td></tr>';
+  }
+
+  async function markContacted(id, btn) {
+    btn.disabled = true;
+    await apiFetch('/api/leads/' + id + '/contacted', { method: 'PATCH' });
+    await loadLeads();
+  }
+
+  function exportLeads() {
+    if (!allLeads.length) return alert('No leads to export.');
+    const header = ['Name', 'Company', 'Email', 'Preferred Time', 'Date', 'Contacted'];
+    const rows = allLeads.map(l => [l.name, l.company, l.email, l.preferred_time, l.created_at, l.contacted ? 'Yes' : 'No']);
+    const csv = [header, ...rows].map(r => r.map(v => '"' + (v||'').replace(/"/g, '""') + '"').join(',')).join('\n');
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'tekstack-leads.csv'; a.click();
+  }
+
+  // ── Training ──────────────────────────────────────────────────────────────────
+  async function loadTraining() {
+    const data = await apiFetch('/api/train');
+    const list = document.getElementById('overrides-list');
+    if (!data.length) { list.innerHTML = '<div class="empty"><p>No overrides yet.</p></div>'; return; }
+    list.innerHTML = '';
+    data.forEach(o => {
+      const div = document.createElement('div');
+      div.style.cssText = 'padding:14px 16px;border-bottom:1px solid var(--gray-100)';
+      div.innerHTML = `
+        <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px">
+          <div style="flex:1">
+            <div class="text-sm" style="font-weight:600;margin-bottom:4px">${escHtml(o.question_pattern)}</div>
+            <div class="text-xs text-gray" style="line-height:1.5">${escHtml(o.preferred_response).substring(0,120)}${o.preferred_response.length > 120 ? '…' : ''}</div>
+          </div>
+          <div style="display:flex;gap:6px;flex-shrink:0">
+            <span class="badge ${o.active ? 'badge-green' : 'badge-gray'}">${o.active ? 'On' : 'Off'}</span>
+            <button class="btn btn-sm btn-ghost" onclick="toggleOverride(${o.id})">${o.active ? 'Disable' : 'Enable'}</button>
+            <button class="btn btn-sm btn-danger" onclick="deleteOverride(${o.id})">✕</button>
+          </div>
+        </div>`;
+      list.appendChild(div);
+    });
+  }
+
+  async function addTrainingOverride() {
+    const pattern = document.getElementById('train-pattern').value.trim();
+    const response = document.getElementById('train-response').value.trim();
+    if (!pattern || !response) return alert('Both fields are required.');
+    await apiFetch('/api/train', { method: 'POST', body: JSON.stringify({ question_pattern: pattern, preferred_response: response }) });
+    document.getElementById('train-pattern').value = '';
+    document.getElementById('train-response').value = '';
+    loadTraining();
+  }
+
+  async function deleteOverride(id) {
+    if (!confirm('Delete this override?')) return;
+    await apiFetch('/api/train/' + id, { method: 'DELETE' });
+    loadTraining();
+  }
+
+  async function toggleOverride(id) {
+    await apiFetch('/api/train/' + id + '/toggle', { method: 'PATCH' });
+    loadTraining();
+  }
+
+  // ── Knowledge ─────────────────────────────────────────────────────────────────
+  async function loadKnowledge() {
+    const data = await apiFetch('/api/knowledge');
+    const tbody = document.getElementById('knowledge-body');
+    tbody.innerHTML = '';
+    data.forEach(k => {
+      tbody.innerHTML += `<tr>
+        <td><strong>${escHtml(k.title || 'Untitled')}</strong>${k.url ? `<br><span class="text-xs text-gray">${escHtml(k.url.substring(0,60))}</span>` : ''}</td>
+        <td><span class="badge ${k.source === 'scraped' ? 'badge-blue' : 'badge-green'}">${k.source}</span></td>
+        <td class="text-xs text-gray">${(k.chars/1000).toFixed(1)}k chars</td>
+        <td><span class="badge ${k.active ? 'badge-green' : 'badge-gray'}">${k.active ? 'Active' : 'Off'}</span></td>
+        <td class="text-xs text-gray">${fmtDate(k.created_at)}</td>
+        <td style="display:flex;gap:6px">
+          <button class="btn btn-sm btn-ghost" onclick="toggleKnowledge(${k.id})">${k.active ? 'Disable' : 'Enable'}</button>
+          <button class="btn btn-sm btn-danger" onclick="deleteKnowledge(${k.id})">✕</button>
+        </td>
+      </tr>`;
+    });
+    if (!data.length) tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:40px;color:var(--gray-500)">No knowledge entries yet. Run a scrape or add manually.</td></tr>';
+  }
+
+  async function addKnowledge() {
+    const title = document.getElementById('know-title').value.trim();
+    const content = document.getElementById('know-content').value.trim();
+    const url = document.getElementById('know-url').value.trim();
+    if (!content) return alert('Content is required.');
+    await apiFetch('/api/knowledge', { method: 'POST', body: JSON.stringify({ title, content, url }) });
+    document.getElementById('know-title').value = '';
+    document.getElementById('know-content').value = '';
+    document.getElementById('know-url').value = '';
+    loadKnowledge();
+  }
+
+  async function deleteKnowledge(id) {
+    if (!confirm('Delete this knowledge entry?')) return;
+    await apiFetch('/api/knowledge/' + id, { method: 'DELETE' });
+    loadKnowledge();
+  }
+
+  async function toggleKnowledge(id) {
+    await apiFetch('/api/knowledge/' + id + '/toggle', { method: 'PATCH' });
+    loadKnowledge();
+  }
+
+  // ── Scraper ───────────────────────────────────────────────────────────────────
+  let scrapePoller = null;
+
+  async function triggerScrape() {
+    const btn = document.getElementById('scrape-btn');
+    const log = document.getElementById('scrape-log');
+    btn.disabled = true;
+    btn.textContent = 'Scraping...';
+    log.style.display = 'block';
+    log.textContent = '';
+    await apiFetch('/api/scrape', { method: 'POST' });
+    scrapePoller = setInterval(pollScrapeStatus, 1500);
+  }
+
+  async function pollScrapeStatus() {
+    const data = await apiFetch('/api/scrape/status');
+    const log = document.getElementById('scrape-log');
+    log.textContent = data.log.join('\n');
+    log.scrollTop = log.scrollHeight;
+    if (!data.running) {
+      clearInterval(scrapePoller);
+      const btn = document.getElementById('scrape-btn');
+      btn.disabled = false;
+      btn.textContent = 'Start Scrape';
+      loadKnowledge();
+    }
+  }
+
+  // ── Helpers ───────────────────────────────────────────────────────────────────
+  function escHtml(str) {
+    return (str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+</script>
+</body>
+</html>
