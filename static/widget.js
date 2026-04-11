@@ -1,8 +1,10 @@
 (function () {
   'use strict';
 
+  // Hardcoded fallback in case data-max-url attribute is stripped by WordPress/WPEngine
+  const FALLBACK_URL = 'https://tekstack-max-agent-production.up.railway.app';
   const scriptEl = document.currentScript || document.querySelector('script[data-max-url]');
-  const BASE_URL = (scriptEl && scriptEl.getAttribute('data-max-url')) || '';
+  const BASE_URL = (scriptEl && scriptEl.getAttribute('data-max-url')) || FALLBACK_URL;
 
   // ── Session tracking ──
   const VISIT_COUNT_KEY = 'max_page_count';
@@ -34,11 +36,12 @@
     });
   }
 
-  // ── Styles ──
+  // ── Flash prevention ──
+  // Hide the entire widget root until CSS is loaded, then let CSS take over
   function injectCriticalStyle() {
     const s = document.createElement('style');
     s.id = 'max-critical-style';
-    s.textContent = '#max-window{display:none!important}#max-launcher{display:none!important}';
+    s.textContent = '#max-widget-root{display:none!important}';
     document.head.insertBefore(s, document.head.firstChild);
   }
 
@@ -48,6 +51,13 @@
     link.id = 'max-widget-styles';
     link.rel = 'stylesheet';
     link.href = BASE_URL + '/static/widget.css';
+    // Once CSS loads (or fails), remove critical style and show widget root
+    link.onload = link.onerror = function () {
+      const root = document.getElementById('max-widget-root');
+      if (root) root.style.display = 'block';
+      const crit = document.getElementById('max-critical-style');
+      if (crit) crit.remove();
+    };
     document.head.appendChild(link);
   }
 
@@ -90,7 +100,7 @@
 
   function el(id) { return document.getElementById(id); }
 
-  // ── Open/Close with no flash ──
+  // ── Open/Close ──
   function openChat() {
     if (isOpen) return;
     isOpen = true;
@@ -173,7 +183,6 @@
       <p>📅 Pick a time that works for you — book directly with our team:</p>
       <a id="max-booking-btn" href="${config.booking_url}" target="_blank" rel="noopener">Book a Meeting →</a>
     `;
-    // Style inline for reliability
     card.style.cssText = 'margin:8px 0;padding:16px;background:#f0f7ff;border:1px solid #c7e0ff;border-radius:12px;display:flex;flex-direction:column;gap:10px;max-width:90%;';
     const p = card.querySelector('p');
     p.style.cssText = 'font-size:13px;color:#1a1a1a;line-height:1.5;margin:0;';
@@ -304,7 +313,6 @@
         document.removeEventListener('mouseleave', onLeave);
         openChat();
         showBadge();
-        // Add a subtle exit message if no conversation yet
         if (el('max-messages').children.length <= 1) {
           setTimeout(() => {
             addMessage('assistant', "Before you go — got any questions about TekStack? I'm happy to help! 😊");
@@ -357,8 +365,6 @@
     injectStyles();
     buildWidget();
     attachEvents();
-    // Show launcher (was hidden by critical style)
-    el('max-launcher').style.setProperty('display', 'flex', 'important');
     trackPage();
     loadConfigAndSchedule();
     setupExitIntent();
