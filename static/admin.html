@@ -272,12 +272,12 @@
           <div class="card">
             <div class="card-header"><h2>Auto-Open Timer</h2></div>
             <div class="card-body">
-              <p class="settings-hint">How many seconds to wait before automatically opening the chat window. Set to <strong>0</strong> to disable auto-open entirely (visitors must click the button).</p>
+              <p class="settings-hint">How many seconds to wait before automatically opening the chat window. Minimum 5 seconds. Use a large value like <strong>9999</strong> to effectively disable auto-open.</p>
               <div class="form-group">
                 <label>Auto-open after</label>
                 <div class="input-with-suffix">
-                  <input type="number" id="settings-timer-first" min="0" max="300" placeholder="20">
-                  <span class="input-suffix">seconds (0 = disabled)</span>
+                  <input type="number" id="settings-timer-first" min="5" max="9999" placeholder="20">
+                  <span class="input-suffix">seconds</span>
                 </div>
               </div>
             </div>

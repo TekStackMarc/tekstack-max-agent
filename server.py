@@ -206,8 +206,11 @@ async def get_config():
     conn = await db.get_db()
     try:
         settings = await db.get_settings(conn)
+        raw_timer = int(settings.get("timer_first_page", 20))
+        # Treat 0 or negative as default 20s (prevents instant open from accidental 0)
+        timer = raw_timer if raw_timer > 0 else 20
         return {
-            "timer_first_page": int(settings.get("timer_first_page", 20)),
+            "timer_first_page": timer,
             "timer_second_page": int(settings.get("timer_second_page", 10)),
             "booking_url": settings.get("booking_url", ""),
             "agent_name": settings.get("agent_name", "Max"),
@@ -499,12 +502,30 @@ async def scrape_status_endpoint(request: Request, _=Depends(verify_admin)):
 
 # ── Serve admin dashboard & static files ──────────────────────────────────────
 
+# Serve widget.js and widget.css with no-cache headers so browsers always get
+# the latest version after deployments.
+@app.get("/static/widget.js")
+async def serve_widget_js():
+    return FileResponse(
+        "static/widget.js",
+        media_type="application/javascript",
+        headers={"Cache-Control": "no-store, no-cache, must-revalidate"},
+    )
+
+@app.get("/static/widget.css")
+async def serve_widget_css():
+    return FileResponse(
+        "static/widget.css",
+        media_type="text/css",
+        headers={"Cache-Control": "no-store, no-cache, must-revalidate"},
+    )
+
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
 
 @app.get("/admin")
 async def admin_dashboard():
-    return FileResponse("static/admin.html")
+    return FileResponse("static/admin.html", headers={"Cache-Control": "no-store, no-cache"})
 
 
 @app.get("/")
