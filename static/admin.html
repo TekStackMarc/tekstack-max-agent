@@ -248,32 +248,46 @@
       <div class="content">
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-bottom:24px">
           <div class="card">
-            <div class="card-header"><h2>Widget Behavior</h2></div>
+            <div class="card-header"><h2>Agent Identity</h2></div>
             <div class="card-body">
-              <p class="settings-hint">Control how long Max waits before automatically opening the chat window for visitors.</p>
+              <p class="settings-hint">Customize the name shown in the chat widget header and greeting.</p>
               <div class="form-group">
-                <label>First Page Timer</label>
-                <div class="input-with-suffix">
-                  <input type="number" id="settings-timer-first" min="0" max="300" placeholder="20">
-                  <span class="input-suffix">seconds</span>
-                </div>
-              </div>
-              <div class="form-group">
-                <label>Second Page Timer</label>
-                <div class="input-with-suffix">
-                  <input type="number" id="settings-timer-second" min="0" max="300" placeholder="10">
-                  <span class="input-suffix">seconds</span>
-                </div>
+                <label>Agent Name</label>
+                <input type="text" id="settings-agent-name" placeholder="Max">
               </div>
             </div>
           </div>
           <div class="card">
             <div class="card-header"><h2>Booking Link</h2></div>
             <div class="card-body">
-              <p class="settings-hint">When Max offers to connect a visitor with your team, this link will be shown.</p>
+              <p class="settings-hint">When the agent offers to connect a visitor with your team, this link will be shown.</p>
               <div class="form-group">
                 <label>Booking URL</label>
                 <input type="text" id="settings-booking-url" placeholder="https://...">
+              </div>
+            </div>
+          </div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-bottom:24px">
+          <div class="card">
+            <div class="card-header"><h2>Auto-Open Timer</h2></div>
+            <div class="card-body">
+              <p class="settings-hint">How many seconds to wait before automatically opening the chat window. Set to <strong>0</strong> to disable auto-open entirely (visitors must click the button).</p>
+              <div class="form-group">
+                <label>Auto-open after</label>
+                <div class="input-with-suffix">
+                  <input type="number" id="settings-timer-first" min="0" max="300" placeholder="20">
+                  <span class="input-suffix">seconds (0 = disabled)</span>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="card" style="opacity:.5;pointer-events:none">
+            <div class="card-header"><h2>Second Page Timer <span style="font-size:11px;font-weight:400;color:var(--gray-500)">(legacy)</span></h2></div>
+            <div class="card-body">
+              <p class="settings-hint">No longer used — the auto-open timer above applies to all visits.</p>
+              <div class="form-group">
+                <input type="number" id="settings-timer-second" placeholder="10" disabled>
               </div>
             </div>
           </div>
@@ -291,9 +305,17 @@
       <div class="content">
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-bottom:24px">
           <div class="card">
-            <div class="card-header"><h2>Scrape TekStack Website</h2></div>
+            <div class="card-header"><h2>Scrape Websites</h2></div>
             <div class="card-body">
-              <p class="text-sm text-gray" style="margin-bottom:16px">Automatically pull all content from tekstack.com and add it to Max's knowledge base. Replaces previous scraped content.</p>
+              <p class="text-sm text-gray" style="margin-bottom:16px">Automatically pull content from your website(s) and add it to the knowledge base. Replaces previous scraped content.</p>
+              <div class="form-group">
+                <label>URLs to Scrape <span class="text-gray">(one per line)</span></label>
+                <textarea id="scrape-urls-input" rows="3" placeholder="https://www.tekstack.com&#10;https://blog.tekstack.com"></textarea>
+              </div>
+              <div style="display:flex;gap:8px;align-items:center;margin-bottom:12px">
+                <button class="btn btn-ghost btn-sm" onclick="saveScrapeUrls()">Save URLs</button>
+                <span id="scrape-urls-saved" style="font-size:12px;color:var(--green);display:none">✓ Saved</span>
+              </div>
               <button class="btn btn-primary" id="scrape-btn" onclick="triggerScrape()">Start Scrape</button>
               <div id="scrape-log" style="margin-top:16px;display:none"></div>
             </div>
@@ -380,7 +402,7 @@
       conversations: loadConversations,
       training: loadTraining,
       settings: loadSettings,
-      knowledge: loadKnowledge
+      knowledge: loadKnowledgePage
     };
     if (loaders[page]) loaders[page]();
   }
@@ -516,26 +538,37 @@
   // ── Settings ──────────────────────────────────────────────────────────────────
   async function loadSettings() {
     const data = await apiFetch('/api/settings');
+    document.getElementById('settings-agent-name').value = data.agent_name || 'Max';
     document.getElementById('settings-timer-first').value = data.timer_first_page || '20';
-    document.getElementById('settings-timer-second').value = data.timer_second_page || '10';
     document.getElementById('settings-booking-url').value = data.booking_url || '';
     document.getElementById('settings-saved-msg').style.display = 'none';
+    // Load scrape URLs
+    const scrapeEl = document.getElementById('scrape-urls-input');
+    if (scrapeEl) scrapeEl.value = data.scrape_urls || 'https://www.tekstack.com';
   }
 
   async function saveSettings() {
+    const agentName = document.getElementById('settings-agent-name').value.trim();
     const timerFirst = document.getElementById('settings-timer-first').value.trim();
-    const timerSecond = document.getElementById('settings-timer-second').value.trim();
     const bookingUrl = document.getElementById('settings-booking-url').value.trim();
 
     const body = {};
-    if (timerFirst) body.timer_first_page = timerFirst;
-    if (timerSecond) body.timer_second_page = timerSecond;
-    if (bookingUrl !== undefined) body.booking_url = bookingUrl;
+    if (agentName) body.agent_name = agentName;
+    if (timerFirst !== '') body.timer_first_page = timerFirst;
+    body.booking_url = bookingUrl;
 
     await apiFetch('/api/settings', { method: 'PATCH', body: JSON.stringify(body) });
     const msg = document.getElementById('settings-saved-msg');
     msg.style.display = 'inline';
     setTimeout(() => { msg.style.display = 'none'; }, 3000);
+  }
+
+  async function saveScrapeUrls() {
+    const urls = document.getElementById('scrape-urls-input').value.trim();
+    await apiFetch('/api/settings', { method: 'PATCH', body: JSON.stringify({ scrape_urls: urls }) });
+    const msg = document.getElementById('scrape-urls-saved');
+    msg.style.display = 'inline';
+    setTimeout(() => { msg.style.display = 'none'; }, 2000);
   }
 
   // ── Training ──────────────────────────────────────────────────────────────────
@@ -626,6 +659,14 @@
   async function toggleKnowledge(id) {
     await apiFetch('/api/knowledge/' + id + '/toggle', { method: 'PATCH' });
     loadKnowledge();
+  }
+
+  // ── Knowledge page (loads both knowledge entries + scrape URLs) ───────────────
+  async function loadKnowledgePage() {
+    loadKnowledge();
+    const data = await apiFetch('/api/settings');
+    const scrapeEl = document.getElementById('scrape-urls-input');
+    if (scrapeEl) scrapeEl.value = data.scrape_urls || 'https://www.tekstack.com';
   }
 
   // ── Scraper ───────────────────────────────────────────────────────────────────

@@ -1,7 +1,8 @@
 """
-Scrapes TekStack website content and stores it in the knowledge base.
+Scrapes website content and stores it in the knowledge base.
 Run manually: python scraper.py
 Or triggered via the admin dashboard POST /api/scrape
+Supports multiple start URLs (configured in Admin > Settings > Scrape URLs).
 """
 import asyncio
 import re
@@ -11,10 +12,9 @@ import httpx
 from bs4 import BeautifulSoup
 
 import aiosqlite
-from database import DB_PATH
+from database import DB_PATH, get_settings
 
-START_URL = "https://www.tekstack.com"
-MAX_PAGES = 50  # cap to avoid runaway scraping
+MAX_PAGES = 100  # cap to avoid runaway scraping
 SKIP_EXTENSIONS = {".pdf", ".png", ".jpg", ".jpeg", ".gif", ".svg", ".zip", ".mp4"}
 
 
@@ -23,8 +23,8 @@ def clean_text(text: str) -> str:
     return text.strip()
 
 
-def is_same_domain(url: str, base: str) -> bool:
-    return urlparse(url).netloc == urlparse(base).netloc
+def is_allowed_domain(url: str, allowed_domains: set) -> bool:
+    return urlparse(url).netloc in allowed_domains
 
 
 def extract_text(soup: BeautifulSoup) -> str:
@@ -34,9 +34,21 @@ def extract_text(soup: BeautifulSoup) -> str:
     return clean_text(text)
 
 
-async def scrape_site(status_callback=None) -> list[dict]:
+async def get_scrape_urls() -> list[str]:
+    """Read scrape URLs from database settings."""
+    async with aiosqlite.connect(DB_PATH) as db:
+        settings = await get_settings(db)
+    raw = settings.get("scrape_urls", "https://www.tekstack.com")
+    urls = [u.strip() for u in raw.split("\n") if u.strip()]
+    return urls if urls else ["https://www.tekstack.com"]
+
+
+async def scrape_site(start_urls: list[str], status_callback=None) -> list[dict]:
+    # Build set of allowed domains (one per start URL)
+    allowed_domains = {urlparse(u).netloc for u in start_urls}
+
     visited = set()
-    queue = [START_URL]
+    queue = list(start_urls)
     results = []
 
     async with httpx.AsyncClient(timeout=15, follow_redirects=True) as client:
@@ -56,7 +68,8 @@ async def scrape_site(status_callback=None) -> list[dict]:
                 if "text/html" not in resp.headers.get("content-type", ""):
                     continue
             except Exception as e:
-                print(f"Error fetching {url}: {e}")
+                if status_callback:
+                    await status_callback(f"Error fetching {url}: {e}")
                 continue
 
             soup = BeautifulSoup(resp.text, "html.parser")
@@ -68,12 +81,12 @@ async def scrape_site(status_callback=None) -> list[dict]:
                 if status_callback:
                     await status_callback(f"Scraped: {title[:60]}")
 
-            # Collect internal links
+            # Collect internal links (same allowed domains only)
             for a in soup.find_all("a", href=True):
                 href = a["href"]
                 full_url = urljoin(url, href).split("#")[0].split("?")[0]
                 if (
-                    is_same_domain(full_url, START_URL)
+                    is_allowed_domain(full_url, allowed_domains)
                     and full_url not in visited
                     and full_url not in queue
                 ):
@@ -90,15 +103,16 @@ async def save_scraped_to_db(pages: list[dict]):
             await db.execute(
                 """INSERT INTO knowledge_entries (source, url, title, content, active)
                    VALUES ('scraped', ?, ?, ?, 1)""",
-                (page["url"], page["title"], page["content"][:8000])  # cap per page
+                (page["url"], page["title"], page["content"][:8000])
             )
         await db.commit()
 
 
 async def run_scrape(status_callback=None):
+    start_urls = await get_scrape_urls()
     if status_callback:
-        await status_callback("Starting scrape of tekstack.com...")
-    pages = await scrape_site(status_callback)
+        await status_callback(f"Starting scrape of {len(start_urls)} URL(s): {', '.join(start_urls)}")
+    pages = await scrape_site(start_urls, status_callback)
     await save_scraped_to_db(pages)
     if status_callback:
         await status_callback(f"Done. Saved {len(pages)} pages to knowledge base.")

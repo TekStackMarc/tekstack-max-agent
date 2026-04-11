@@ -90,6 +90,14 @@ async def init_db():
             "INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)",
             ("booking_url", "https://outlook.office.com/book/TekStackMeeting@tekstack.com/?ismsaljsauthenabled")
         )
+        await db.execute(
+            "INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)",
+            ("agent_name", "Max")
+        )
+        await db.execute(
+            "INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)",
+            ("scrape_urls", "https://www.tekstack.com")
+        )
 
         await db.commit()
 
@@ -159,6 +167,8 @@ async def get_settings(db) -> dict:
         "timer_first_page": "20",
         "timer_second_page": "10",
         "booking_url": "https://outlook.office.com/book/TekStackMeeting@tekstack.com/?ismsaljsauthenabled",
+        "agent_name": "Max",
+        "scrape_urls": "https://www.tekstack.com",
     }
     result = dict(defaults)
     for key, value in rows:

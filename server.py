@@ -76,6 +76,8 @@ class SettingsPatch(BaseModel):
     timer_first_page: str | None = None
     timer_second_page: str | None = None
     booking_url: str | None = None
+    agent_name: str | None = None
+    scrape_urls: str | None = None
 
 
 class TrackRequest(BaseModel):
@@ -208,6 +210,7 @@ async def get_config():
             "timer_first_page": int(settings.get("timer_first_page", 20)),
             "timer_second_page": int(settings.get("timer_second_page", 10)),
             "booking_url": settings.get("booking_url", ""),
+            "agent_name": settings.get("agent_name", "Max"),
         }
     finally:
         await conn.close()
@@ -250,6 +253,10 @@ async def update_settings(req: SettingsPatch, request: Request, _=Depends(verify
             await db.set_setting(conn, "timer_second_page", req.timer_second_page)
         if req.booking_url is not None:
             await db.set_setting(conn, "booking_url", req.booking_url)
+        if req.agent_name is not None:
+            await db.set_setting(conn, "agent_name", req.agent_name)
+        if req.scrape_urls is not None:
+            await db.set_setting(conn, "scrape_urls", req.scrape_urls)
         return {"status": "ok"}
     finally:
         await conn.close()

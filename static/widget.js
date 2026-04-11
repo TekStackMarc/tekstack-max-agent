@@ -20,7 +20,7 @@
   let CONVERSATION_ID = genId();
 
   // ── Config (loaded from server) ──
-  let config = { timer_first_page: 20, timer_second_page: 10, booking_url: '' };
+  let config = { timer_first_page: 20, booking_url: '', agent_name: 'Max' };
 
   // ── State ──
   let isOpen = false;
@@ -168,9 +168,18 @@
 
   function showGreeting() {
     addMessage('assistant',
-      "Hi! 👋 I'm Max, TekStack's AI assistant. I can answer questions about our products, " +
+      `Hi! 👋 I'm ${config.agent_name}, TekStack's AI assistant. I can answer questions about our products, ` +
       "help you find the right solution, or connect you with our team. What can I help you with today?"
     );
+  }
+
+  function applyAgentName() {
+    const nameEl = document.getElementById('max-header-name');
+    if (nameEl) nameEl.textContent = config.agent_name;
+    const btn = document.getElementById('max-launcher');
+    if (btn) btn.setAttribute('aria-label', 'Chat with ' + config.agent_name);
+    const input = document.getElementById('max-input');
+    if (input) input.setAttribute('placeholder', 'Ask me anything about TekStack...');
   }
 
   // ── Booking card ──
@@ -307,6 +316,8 @@
   // ── Exit intent ──
   function setupExitIntent() {
     if (sessionStorage.getItem(EXIT_SHOWN_KEY)) return;
+    // Wait 5s before activating so it doesn't fire immediately on page load
+    setTimeout(() => {
     document.addEventListener('mouseleave', function onLeave(e) {
       if (e.clientY <= 0 && !isOpen) {
         sessionStorage.setItem(EXIT_SHOWN_KEY, '1');
@@ -320,6 +331,7 @@
         }
       }
     });
+    }, 5000); // 5s grace period before exit intent activates
   }
 
   // ── Auto-open timer ──
@@ -329,10 +341,13 @@
       if (res.ok) config = await res.json();
     } catch (_) {}
 
+    // Apply agent name to widget UI
+    applyAgentName();
+
+    // Auto-open: use timer_first_page for all visits; 0 = disabled
     if (sessionStorage.getItem(AUTO_SHOWN_KEY)) return;
-    const delay = visitCount <= 1
-      ? (config.timer_first_page * 1000)
-      : (config.timer_second_page * 1000);
+    const delay = config.timer_first_page > 0 ? (config.timer_first_page * 1000) : null;
+    if (delay === null) return; // timer disabled
     setTimeout(() => {
       if (!isOpen) {
         openChat();
