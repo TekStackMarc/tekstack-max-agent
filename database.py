@@ -61,7 +61,36 @@ async def init_db():
                 active INTEGER DEFAULT 1,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             );
+
+            CREATE TABLE IF NOT EXISTS settings (
+                key TEXT PRIMARY KEY,
+                value TEXT NOT NULL,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
+
+            CREATE TABLE IF NOT EXISTS page_visits (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                session_id TEXT NOT NULL,
+                url TEXT NOT NULL,
+                title TEXT,
+                visited_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
         """)
+
+        # Insert default settings if not exist
+        await db.execute(
+            "INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)",
+            ("timer_first_page", "20")
+        )
+        await db.execute(
+            "INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)",
+            ("timer_second_page", "10")
+        )
+        await db.execute(
+            "INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)",
+            ("booking_url", "https://outlook.office.com/book/TekStackMeeting@tekstack.com/?ismsaljsauthenabled")
+        )
+
         await db.commit()
 
 
@@ -121,3 +150,25 @@ async def get_active_training_overrides(db) -> list[dict]:
     ) as cursor:
         rows = await cursor.fetchall()
     return [{"pattern": row[0], "response": row[1]} for row in rows]
+
+
+async def get_settings(db) -> dict:
+    async with db.execute("SELECT key, value FROM settings") as cursor:
+        rows = await cursor.fetchall()
+    defaults = {
+        "timer_first_page": "20",
+        "timer_second_page": "10",
+        "booking_url": "https://outlook.office.com/book/TekStackMeeting@tekstack.com/?ismsaljsauthenabled",
+    }
+    result = dict(defaults)
+    for key, value in rows:
+        result[key] = value
+    return result
+
+
+async def set_setting(db, key: str, value: str):
+    await db.execute(
+        "INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value=excluded.value, updated_at=CURRENT_TIMESTAMP",
+        (key, value)
+    )
+    await db.commit()

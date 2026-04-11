@@ -61,15 +61,6 @@ class ChatRequest(BaseModel):
     page_url: str = ""
 
 
-class LeadRequest(BaseModel):
-    conversation_id: str
-    name: str
-    company: str
-    email: str
-    preferred_time: str = ""
-    notes: str = ""
-
-
 class TrainingRequest(BaseModel):
     question_pattern: str
     preferred_response: str
@@ -79,6 +70,18 @@ class KnowledgeRequest(BaseModel):
     title: str = ""
     content: str
     url: str = ""
+
+
+class SettingsPatch(BaseModel):
+    timer_first_page: str | None = None
+    timer_second_page: str | None = None
+    booking_url: str | None = None
+
+
+class TrackRequest(BaseModel):
+    session_id: str
+    url: str
+    title: str = ""
 
 
 # ── System prompt builder ─────────────────────────────────────────────────────
@@ -92,17 +95,16 @@ You help visitors learn about TekStack's products and services with enthusiasm a
 - Curious about the visitor's needs — ask follow-up questions
 - Confident about TekStack's value without being pushy
 
-## Lead Capture
-When a visitor shows clear interest (asks about pricing, demos, trials, or wants to learn more),
-proactively offer to connect them with a product expert. Say something natural like:
-"That's a great question — I'd love to connect you with one of our product experts who can give
-you a personalized walkthrough. Want me to set that up?"
+## Connecting Visitors with Experts
+When a visitor shows clear interest (asks about pricing, demos, trials, getting started, or wants to speak to someone),
+offer to share a link to book time directly with the TekStack team. Say something natural like:
+"I'd love to connect you with one of our product experts — they can give you a personalized walkthrough.
+Want me to share a link to book a time that works for you?"
 
-When you decide to capture lead info, output this exact token on its own line:
+When you decide to share the booking link, output this exact token on its own line:
 [CAPTURE_LEAD]
 
-Then continue with a friendly message like "Great! Just a couple of quick details and we'll
-get you connected."
+Then continue with a short friendly message like "Here's a link to book directly with our team — pick whatever time works best for you!"
 
 ## Guidelines
 - Never make up facts about TekStack — if you don't know, say so honestly
@@ -195,26 +197,75 @@ async def chat(chat: ChatRequest):
     )
 
 
-# ── Lead capture ──────────────────────────────────────────────────────────────
+# ── Public: Config ────────────────────────────────────────────────────────────
 
-@app.post("/api/leads")
-async def capture_lead(lead: LeadRequest):
+@app.get("/api/config")
+async def get_config():
+    conn = await db.get_db()
+    try:
+        settings = await db.get_settings(conn)
+        return {
+            "timer_first_page": int(settings.get("timer_first_page", 20)),
+            "timer_second_page": int(settings.get("timer_second_page", 10)),
+            "booking_url": settings.get("booking_url", ""),
+        }
+    finally:
+        await conn.close()
+
+
+# ── Public: Page tracking ─────────────────────────────────────────────────────
+
+@app.post("/api/track")
+async def track_page(req: TrackRequest):
     conn = await db.get_db()
     try:
         await conn.execute(
-            """INSERT INTO leads (conversation_id, name, company, email, preferred_time, notes)
-               VALUES (?, ?, ?, ?, ?, ?)""",
-            (lead.conversation_id, lead.name, lead.company, lead.email,
-             lead.preferred_time, lead.notes),
-        )
-        # Tag conversation with visitor info
-        await conn.execute(
-            """UPDATE conversations SET visitor_name=?, visitor_email=?, visitor_company=?
-               WHERE id=?""",
-            (lead.name, lead.email, lead.company, lead.conversation_id),
+            "INSERT INTO page_visits (session_id, url, title) VALUES (?, ?, ?)",
+            (req.session_id, req.url, req.title)
         )
         await conn.commit()
         return {"status": "ok"}
+    finally:
+        await conn.close()
+
+
+# ── Admin: Settings ───────────────────────────────────────────────────────────
+
+@app.get("/api/settings")
+async def get_settings_admin(request: Request, _=Depends(verify_admin)):
+    conn = await db.get_db()
+    try:
+        return await db.get_settings(conn)
+    finally:
+        await conn.close()
+
+
+@app.patch("/api/settings")
+async def update_settings(req: SettingsPatch, request: Request, _=Depends(verify_admin)):
+    conn = await db.get_db()
+    try:
+        if req.timer_first_page is not None:
+            await db.set_setting(conn, "timer_first_page", req.timer_first_page)
+        if req.timer_second_page is not None:
+            await db.set_setting(conn, "timer_second_page", req.timer_second_page)
+        if req.booking_url is not None:
+            await db.set_setting(conn, "booking_url", req.booking_url)
+        return {"status": "ok"}
+    finally:
+        await conn.close()
+
+
+# ── Admin: Page Visits ────────────────────────────────────────────────────────
+
+@app.get("/api/page-visits")
+async def get_page_visits(request: Request, _=Depends(verify_admin)):
+    conn = await db.get_db()
+    try:
+        async with conn.execute(
+            "SELECT session_id, url, title, visited_at FROM page_visits ORDER BY visited_at DESC LIMIT 500"
+        ) as cursor:
+            rows = await cursor.fetchall()
+        return [{"session_id": r[0], "url": r[1], "title": r[2], "visited_at": r[3]} for r in rows]
     finally:
         await conn.close()
 
@@ -271,41 +322,6 @@ async def get_conversation(conversation_id: str, request: Request, _=Depends(ver
             "created_at": convo[6], "updated_at": convo[7],
             "messages": [{"role": m[0], "content": m[1], "created_at": m[2]} for m in msgs],
         }
-    finally:
-        await conn.close()
-
-
-# ── Admin: Leads ──────────────────────────────────────────────────────────────
-
-@app.get("/api/leads")
-async def list_leads(request: Request, _=Depends(verify_admin)):
-    conn = await db.get_db()
-    try:
-        async with conn.execute(
-            """SELECT id, conversation_id, name, company, email, preferred_time,
-                      notes, created_at, contacted
-               FROM leads ORDER BY created_at DESC"""
-        ) as cursor:
-            rows = await cursor.fetchall()
-        return [
-            {
-                "id": r[0], "conversation_id": r[1], "name": r[2], "company": r[3],
-                "email": r[4], "preferred_time": r[5], "notes": r[6],
-                "created_at": r[7], "contacted": bool(r[8]),
-            }
-            for r in rows
-        ]
-    finally:
-        await conn.close()
-
-
-@app.patch("/api/leads/{lead_id}/contacted")
-async def mark_lead_contacted(lead_id: int, request: Request, _=Depends(verify_admin)):
-    conn = await db.get_db()
-    try:
-        await conn.execute("UPDATE leads SET contacted = 1 WHERE id = ?", (lead_id,))
-        await conn.commit()
-        return {"status": "ok"}
     finally:
         await conn.close()
 

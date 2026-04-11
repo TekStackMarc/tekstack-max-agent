@@ -1,25 +1,32 @@
-/**
- * TekStack Max Chat Widget
- * Drop this on your WordPress site via Insert Headers and Footers:
- *   <script src="https://YOUR-BACKEND-URL/static/widget.js" data-max-url="https://YOUR-BACKEND-URL"></script>
- */
 (function () {
   'use strict';
 
-  // ── Config ──────────────────────────────────────────────────────────────────
   const scriptEl = document.currentScript || document.querySelector('script[data-max-url]');
   const BASE_URL = (scriptEl && scriptEl.getAttribute('data-max-url')) || '';
-  const FIRST_PAGE_DELAY_MS = 20000;   // 20 seconds on first page
-  const SECOND_PAGE_DELAY_MS = 10000;  // 10 seconds on second page
 
-  // ── Session tracking ────────────────────────────────────────────────────────
+  // ── Session tracking ──
   const VISIT_COUNT_KEY = 'max_page_count';
   const AUTO_SHOWN_KEY  = 'max_auto_shown';
+  const EXIT_SHOWN_KEY  = 'max_exit_shown';
 
   let visitCount = parseInt(sessionStorage.getItem(VISIT_COUNT_KEY) || '0', 10) + 1;
   sessionStorage.setItem(VISIT_COUNT_KEY, String(visitCount));
 
-  // ── Conversation identity ───────────────────────────────────────────────────
+  const SESSION_ID = sessionStorage.getItem('max_session_id') || (() => {
+    const id = genId(); sessionStorage.setItem('max_session_id', id); return id;
+  })();
+  let CONVERSATION_ID = genId();
+
+  // ── Config (loaded from server) ──
+  let config = { timer_first_page: 20, timer_second_page: 10, booking_url: '' };
+
+  // ── State ──
+  let isOpen = false;
+  let isStreaming = false;
+  let bookingPending = false;
+  let currentBubble = null;
+  let currentBubbleText = '';
+
   function genId() {
     return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
       const r = Math.random() * 16 | 0;
@@ -27,22 +34,14 @@
     });
   }
 
-  const SESSION_ID = sessionStorage.getItem('max_session_id') || (() => {
-    const id = genId();
-    sessionStorage.setItem('max_session_id', id);
-    return id;
-  })();
+  // ── Styles ──
+  function injectCriticalStyle() {
+    const s = document.createElement('style');
+    s.id = 'max-critical-style';
+    s.textContent = '#max-window{display:none!important}#max-launcher{display:none!important}';
+    document.head.insertBefore(s, document.head.firstChild);
+  }
 
-  let CONVERSATION_ID = genId(); // fresh per page load
-
-  // ── State ───────────────────────────────────────────────────────────────────
-  let isOpen = false;
-  let isStreaming = false;
-  let leadFormPending = false;
-  let currentBubble = null;
-  let currentBubbleText = '';
-
-  // ── Build DOM ────────────────────────────────────────────────────────────────
   function injectStyles() {
     if (document.getElementById('max-widget-styles')) return;
     const link = document.createElement('link');
@@ -52,109 +51,68 @@
     document.head.appendChild(link);
   }
 
+  // ── DOM ──
   function buildWidget() {
     const root = document.createElement('div');
     root.id = 'max-widget-root';
     root.innerHTML = `
-      <!-- Launcher button -->
       <button id="max-launcher" aria-label="Chat with Max">
         <span id="max-badge"></span>
         <svg class="icon-chat" width="26" height="26" fill="none" viewBox="0 0 24 24" stroke="white" stroke-width="2">
           <path stroke-linecap="round" stroke-linejoin="round" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"/>
         </svg>
-        <svg class="icon-close" width="22" height="22" fill="none" viewBox="0 0 24 24" stroke="white" stroke-width="2.5" style="opacity:0;position:absolute">
+        <svg class="icon-close" width="22" height="22" fill="none" viewBox="0 0 24 24" stroke="white" stroke-width="2.5">
           <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
         </svg>
       </button>
-
-      <!-- Chat window -->
-      <div id="max-window" class="hidden" role="dialog" aria-label="Max chat window">
-        <!-- Header -->
+      <div id="max-window" role="dialog" aria-label="Max chat window">
         <div id="max-header">
           <div id="max-avatar">🤖</div>
           <div id="max-header-info">
             <div id="max-header-name">Max</div>
-            <div id="max-header-status">
-              <span id="max-status-dot"></span> TekStack Assistant
-            </div>
+            <div id="max-header-status"><span id="max-status-dot"></span> TekStack Assistant</div>
           </div>
         </div>
-
-        <!-- Messages -->
         <div id="max-messages" role="log" aria-live="polite"></div>
-
-        <!-- Lead capture form (hidden by default) -->
-        <div id="max-lead-form">
-          <h3>Let's connect you with an expert 👋</h3>
-          <div class="max-form-field">
-            <label>Your name *</label>
-            <input id="max-lead-name" type="text" placeholder="Jane Smith">
-          </div>
-          <div class="max-form-field">
-            <label>Company *</label>
-            <input id="max-lead-company" type="text" placeholder="Acme Corp">
-          </div>
-          <div class="max-form-field">
-            <label>Work email *</label>
-            <input id="max-lead-email" type="email" placeholder="jane@acme.com">
-          </div>
-          <div class="max-form-field">
-            <label>Best time to reach you</label>
-            <select id="max-lead-time">
-              <option value="">— select —</option>
-              <option>Morning (9am–12pm)</option>
-              <option>Afternoon (12pm–5pm)</option>
-              <option>Either works</option>
-            </select>
-          </div>
-          <button id="max-lead-submit">Connect me with an expert →</button>
-        </div>
-
-        <!-- Input bar -->
         <div id="max-input-bar">
-          <textarea
-            id="max-input"
-            rows="1"
-            placeholder="Ask me anything about TekStack..."
-            aria-label="Message Max"></textarea>
+          <textarea id="max-input" rows="1" placeholder="Ask me anything about TekStack..." aria-label="Message Max"></textarea>
           <button id="max-send" aria-label="Send">
             <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="white" stroke-width="2.5">
               <path stroke-linecap="round" stroke-linejoin="round" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/>
             </svg>
           </button>
         </div>
-
         <div id="max-footer">Powered by TekStack AI</div>
       </div>
     `;
     document.body.appendChild(root);
   }
 
-  // ── UI helpers ──────────────────────────────────────────────────────────────
   function el(id) { return document.getElementById(id); }
 
+  // ── Open/Close with no flash ──
   function openChat() {
     if (isOpen) return;
     isOpen = true;
-    el('max-window').classList.remove('hidden');
+    const win = el('max-window');
+    win.classList.remove('closing');
+    win.style.display = 'flex';
     el('max-launcher').classList.add('open');
     el('max-badge').classList.remove('visible');
-    if (el('max-messages').children.length === 0) {
-      showGreeting();
-    }
+    if (el('max-messages').children.length === 0) showGreeting();
     setTimeout(() => el('max-input').focus(), 200);
   }
 
   function closeChat() {
     if (!isOpen) return;
     isOpen = false;
-    el('max-window').classList.add('hidden');
+    const win = el('max-window');
+    win.classList.add('closing');
     el('max-launcher').classList.remove('open');
+    setTimeout(() => { win.style.display = 'none'; win.classList.remove('closing'); }, 250);
   }
 
-  function toggleChat() {
-    isOpen ? closeChat() : openChat();
-  }
+  function toggleChat() { isOpen ? closeChat() : openChat(); }
 
   function addMessage(role, text) {
     const container = el('max-messages');
@@ -190,10 +148,7 @@
   }
 
   function showBadge() {
-    if (!isOpen) {
-      const badge = el('max-badge');
-      badge.classList.add('visible');
-    }
+    if (!isOpen) el('max-badge').classList.add('visible');
   }
 
   function setInputDisabled(disabled) {
@@ -201,7 +156,6 @@
     el('max-send').disabled = disabled;
   }
 
-  // ── Greeting ─────────────────────────────────────────────────────────────────
   function showGreeting() {
     addMessage('assistant',
       "Hi! 👋 I'm Max, TekStack's AI assistant. I can answer questions about our products, " +
@@ -209,29 +163,48 @@
     );
   }
 
-  // ── Streaming chat ────────────────────────────────────────────────────────────
+  // ── Booking card ──
+  function showBookingCard() {
+    const container = el('max-messages');
+    const card = document.createElement('div');
+    card.id = 'max-booking-card';
+    card.className = 'max-booking-card';
+    card.innerHTML = `
+      <p>📅 Pick a time that works for you — book directly with our team:</p>
+      <a id="max-booking-btn" href="${config.booking_url}" target="_blank" rel="noopener">Book a Meeting →</a>
+    `;
+    // Style inline for reliability
+    card.style.cssText = 'margin:8px 0;padding:16px;background:#f0f7ff;border:1px solid #c7e0ff;border-radius:12px;display:flex;flex-direction:column;gap:10px;max-width:90%;';
+    const p = card.querySelector('p');
+    p.style.cssText = 'font-size:13px;color:#1a1a1a;line-height:1.5;margin:0;';
+    const btn = card.querySelector('a');
+    btn.style.cssText = 'padding:10px 16px;background:#0052cc;color:white;border-radius:8px;font-size:13px;font-weight:500;font-family:Montserrat,sans-serif;text-decoration:none;text-align:center;transition:background 0.15s;display:inline-block;';
+    btn.onmouseover = () => btn.style.background = '#0041a8';
+    btn.onmouseout = () => btn.style.background = '#0052cc';
+    container.appendChild(card);
+    scrollToBottom();
+  }
+
+  // ── Chat ──
   function sendMessage(text) {
     if (!text.trim() || isStreaming) return;
     isStreaming = true;
-    leadFormPending = false;
-
+    bookingPending = false;
     addMessage('user', text);
     el('max-input').value = '';
     el('max-input').style.height = 'auto';
     setInputDisabled(true);
     addTypingIndicator();
 
-    const body = JSON.stringify({
-      conversation_id: CONVERSATION_ID,
-      session_id: SESSION_ID,
-      message: text,
-      page_url: window.location.href,
-    });
-
     fetch(BASE_URL + '/api/chat', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body,
+      body: JSON.stringify({
+        conversation_id: CONVERSATION_ID,
+        session_id: SESSION_ID,
+        message: text,
+        page_url: window.location.href,
+      }),
     }).then(response => {
       if (!response.ok) throw new Error('API error ' + response.status);
       const reader = response.body.getReader();
@@ -242,37 +215,25 @@
 
       function processBuffer() {
         const lines = buffer.split('\n');
-        buffer = lines.pop(); // Keep incomplete line
-
+        buffer = lines.pop();
         for (const line of lines) {
           if (!line.startsWith('data: ')) continue;
-          try {
-            const event = JSON.parse(line.slice(6));
-            handleSSEEvent(event);
-          } catch (_) { /* ignore parse errors */ }
+          try { handleSSEEvent(JSON.parse(line.slice(6))); } catch (_) {}
         }
       }
 
       function read() {
         reader.read().then(({ done, value }) => {
-          if (done) {
-            finishStreaming();
-            return;
-          }
+          if (done) { finishStreaming(); return; }
           buffer += decoder.decode(value, { stream: true });
           processBuffer();
           read();
-        }).catch(err => {
-          console.error('Stream error:', err);
-          finishStreaming();
-        });
+        }).catch(() => { finishStreaming(); });
       }
-
       read();
-    }).catch(err => {
-      console.error('Fetch error:', err);
+    }).catch(() => {
       removeTypingIndicator();
-      addMessage('assistant', 'Sorry, I ran into a problem. Please try again in a moment.');
+      addMessage('assistant', 'Sorry, I ran into a problem. Please try again.');
       finishStreaming();
     });
   }
@@ -294,15 +255,12 @@
         currentBubble.textContent = currentBubbleText;
         scrollToBottom();
         break;
-
       case 'lead_form':
-        leadFormPending = true;
+        bookingPending = true;
         break;
-
       case 'done':
         finishStreaming();
         break;
-
       case 'error':
         removeTypingIndicator();
         addMessage('assistant', 'Sorry, something went wrong. Please try again.');
@@ -318,66 +276,55 @@
     removeTypingIndicator();
     setInputDisabled(false);
     el('max-input').focus();
-
-    if (leadFormPending) {
-      showLeadForm();
-      leadFormPending = false;
+    if (bookingPending) {
+      showBookingCard();
+      bookingPending = false;
     }
   }
 
-  // ── Lead form ─────────────────────────────────────────────────────────────────
-  function showLeadForm() {
-    const form = el('max-lead-form');
-    form.classList.add('visible');
-    el('max-lead-name').focus();
-    scrollToBottom();
-  }
-
-  function hideLeadForm() {
-    el('max-lead-form').classList.remove('visible');
-  }
-
-  function submitLead() {
-    const name = el('max-lead-name').value.trim();
-    const company = el('max-lead-company').value.trim();
-    const email = el('max-lead-email').value.trim();
-    const time = el('max-lead-time').value;
-
-    if (!name) { el('max-lead-name').focus(); return; }
-    if (!company) { el('max-lead-company').focus(); return; }
-    if (!email || !email.includes('@')) { el('max-lead-email').focus(); return; }
-
-    const btn = el('max-lead-submit');
-    btn.disabled = true;
-    btn.textContent = 'Submitting...';
-
-    fetch(BASE_URL + '/api/leads', {
+  // ── Page tracking ──
+  function trackPage() {
+    fetch(BASE_URL + '/api/track', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        conversation_id: CONVERSATION_ID,
-        name, company, email,
-        preferred_time: time,
+        session_id: SESSION_ID,
+        url: window.location.href,
+        title: document.title,
       }),
-    }).then(() => {
-      hideLeadForm();
-      addMessage('assistant',
-        `Thanks, ${name}! 🎉 Someone from the TekStack team will reach out to ${email} soon. ` +
-        `In the meantime, feel free to ask me anything else!`
-      );
-      showBadge();
-    }).catch(() => {
-      btn.disabled = false;
-      btn.textContent = 'Connect me with an expert →';
-      addMessage('assistant', 'Hmm, there was an issue submitting your info. Please try again.');
+    }).catch(() => {});
+  }
+
+  // ── Exit intent ──
+  function setupExitIntent() {
+    if (sessionStorage.getItem(EXIT_SHOWN_KEY)) return;
+    document.addEventListener('mouseleave', function onLeave(e) {
+      if (e.clientY <= 0 && !isOpen) {
+        sessionStorage.setItem(EXIT_SHOWN_KEY, '1');
+        document.removeEventListener('mouseleave', onLeave);
+        openChat();
+        showBadge();
+        // Add a subtle exit message if no conversation yet
+        if (el('max-messages').children.length <= 1) {
+          setTimeout(() => {
+            addMessage('assistant', "Before you go — got any questions about TekStack? I'm happy to help! 😊");
+          }, 400);
+        }
+      }
     });
   }
 
-  // ── Auto-open timer ───────────────────────────────────────────────────────────
-  function scheduleAutoOpen() {
-    if (sessionStorage.getItem(AUTO_SHOWN_KEY)) return;
+  // ── Auto-open timer ──
+  async function loadConfigAndSchedule() {
+    try {
+      const res = await fetch(BASE_URL + '/api/config');
+      if (res.ok) config = await res.json();
+    } catch (_) {}
 
-    const delay = visitCount <= 1 ? FIRST_PAGE_DELAY_MS : SECOND_PAGE_DELAY_MS;
+    if (sessionStorage.getItem(AUTO_SHOWN_KEY)) return;
+    const delay = visitCount <= 1
+      ? (config.timer_first_page * 1000)
+      : (config.timer_second_page * 1000);
     setTimeout(() => {
       if (!isOpen) {
         openChat();
@@ -387,43 +334,34 @@
     }, delay);
   }
 
-  // ── Input auto-resize ─────────────────────────────────────────────────────────
+  // ── Input auto-resize ──
   function autoResize(textarea) {
     textarea.style.height = 'auto';
     textarea.style.height = Math.min(textarea.scrollHeight, 120) + 'px';
   }
 
-  // ── Wire up events ────────────────────────────────────────────────────────────
+  // ── Events ──
   function attachEvents() {
     el('max-launcher').addEventListener('click', toggleChat);
-
-    el('max-send').addEventListener('click', () => {
-      sendMessage(el('max-input').value);
-    });
-
+    el('max-send').addEventListener('click', () => sendMessage(el('max-input').value));
     el('max-input').addEventListener('keydown', e => {
-      if (e.key === 'Enter' && !e.shiftKey) {
-        e.preventDefault();
-        sendMessage(e.target.value);
-      }
+      if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(e.target.value); }
     });
-
     el('max-input').addEventListener('input', e => autoResize(e.target));
-
-    el('max-lead-submit').addEventListener('click', submitLead);
-
-    // Close on Escape
-    document.addEventListener('keydown', e => {
-      if (e.key === 'Escape' && isOpen) closeChat();
-    });
+    document.addEventListener('keydown', e => { if (e.key === 'Escape' && isOpen) closeChat(); });
   }
 
-  // ── Init ──────────────────────────────────────────────────────────────────────
+  // ── Init ──
   function init() {
+    injectCriticalStyle();
     injectStyles();
     buildWidget();
     attachEvents();
-    scheduleAutoOpen();
+    // Show launcher (was hidden by critical style)
+    el('max-launcher').style.setProperty('display', 'flex', 'important');
+    trackPage();
+    loadConfigAndSchedule();
+    setupExitIntent();
   }
 
   if (document.readyState === 'loading') {
