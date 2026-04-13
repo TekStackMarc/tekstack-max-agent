@@ -167,20 +167,36 @@
   }
 
   function showGreeting() {
+    const name = config.agent_name || 'Max';
+    const company = config.company_name || 'our company';
     addMessage('assistant',
-      `Hi! 👋 I'm ${config.agent_name}, TekStack's AI assistant. I can answer questions about our products, ` +
-      "help you find the right solution, or connect you with our team. What can I help you with today?"
+      `Hi! 👋 I'm ${name}, ${company}'s AI assistant. I can answer questions about our products, ` +
+      `help you find the right solution, or connect you with our team. What can I help you with today?`
     );
   }
 
-  function applyAgentName() {
+  function applyBranding() {
+    // Primary color — sets CSS variable used throughout the widget
+    if (config.primary_color) {
+      document.documentElement.style.setProperty('--max-primary', config.primary_color);
+    }
+    // Agent name
     const nameEl = document.getElementById('max-header-name');
-    if (nameEl) nameEl.textContent = config.agent_name;
+    if (nameEl) nameEl.textContent = config.agent_name || 'Max';
     const btn = document.getElementById('max-launcher');
-    if (btn) btn.setAttribute('aria-label', 'Chat with ' + config.agent_name);
-    const input = document.getElementById('max-input');
-    if (input) input.setAttribute('placeholder', 'Ask me anything about TekStack...');
+    if (btn) btn.setAttribute('aria-label', 'Chat with ' + (config.agent_name || 'Max'));
+    // Company name in header subtitle
+    const statusEl = document.getElementById('max-header-status');
+    if (statusEl) {
+      statusEl.innerHTML = `<span id="max-status-dot"></span> ${config.company_name || 'AI Assistant'}`;
+    }
+    // Footer
+    const footer = document.getElementById('max-footer');
+    if (footer) footer.textContent = `Powered by ${config.company_name || 'AI'} Assistant`;
   }
+
+  // Keep old name as alias for backward compat
+  function applyAgentName() { applyBranding(); }
 
   // ── Booking card ──
   function showBookingCard() {
@@ -341,8 +357,8 @@
       if (res.ok) config = await res.json();
     } catch (_) {}
 
-    // Apply agent name to widget UI
-    applyAgentName();
+    // Apply branding (color, name, company)
+    applyBranding();
 
     // Auto-open: use timer_first_page for all visits; 0 = disabled
     if (sessionStorage.getItem(AUTO_SHOWN_KEY)) return;

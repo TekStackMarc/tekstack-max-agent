@@ -153,7 +153,7 @@
 <!-- Main Layout -->
 <div class="layout" id="app" style="display:none">
   <aside class="sidebar">
-    <div class="sidebar-logo">Max <span>Admin</span></div>
+    <div class="sidebar-logo" id="sidebar-logo">Max <span>Admin</span></div>
     <nav class="sidebar-nav">
       <div class="nav-item active" data-page="dashboard" onclick="navigate('dashboard', this)">
         <svg class="icon" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/></svg>
@@ -250,10 +250,26 @@
           <div class="card">
             <div class="card-header"><h2>Agent Identity</h2></div>
             <div class="card-body">
-              <p class="settings-hint">Customize the name shown in the chat widget header and greeting.</p>
+              <p class="settings-hint">Customize how the agent appears in the chat widget and in this admin console.</p>
               <div class="form-group">
-                <label>Agent Name</label>
+                <label>Agent Name <span class="text-gray text-xs">(shown in widget header & greeting)</span></label>
                 <input type="text" id="settings-agent-name" placeholder="Max">
+              </div>
+              <div class="form-group">
+                <label>Company Name <span class="text-gray text-xs">(shown in widget subtitle & footer)</span></label>
+                <input type="text" id="settings-company-name" placeholder="TekStack">
+              </div>
+              <div class="form-group">
+                <label>Admin Console Title <span class="text-gray text-xs">(shown in this sidebar)</span></label>
+                <input type="text" id="settings-admin-title" placeholder="Max Admin">
+              </div>
+              <div class="form-group">
+                <label>Brand Color <span class="text-gray text-xs">(launcher, header, accents)</span></label>
+                <div style="display:flex;gap:10px;align-items:center">
+                  <input type="color" id="settings-primary-color" value="#0052cc" style="width:48px;height:36px;padding:2px;border:1px solid var(--gray-200);border-radius:6px;cursor:pointer">
+                  <input type="text" id="settings-primary-color-hex" placeholder="#0052cc" style="width:110px">
+                  <span class="text-xs text-gray">Pick a color or enter hex</span>
+                </div>
               </div>
             </div>
           </div>
@@ -539,25 +555,64 @@
   async function loadSettings() {
     const data = await apiFetch('/api/settings');
     document.getElementById('settings-agent-name').value = data.agent_name || 'Max';
+    document.getElementById('settings-company-name').value = data.company_name || 'TekStack';
+    document.getElementById('settings-admin-title').value = data.admin_title || 'Max Admin';
     document.getElementById('settings-timer-first').value = data.timer_first_page || '20';
     document.getElementById('settings-booking-url').value = data.booking_url || '';
+    const color = data.primary_color || '#0052cc';
+    document.getElementById('settings-primary-color').value = color;
+    document.getElementById('settings-primary-color-hex').value = color;
     document.getElementById('settings-saved-msg').style.display = 'none';
     // Load scrape URLs
     const scrapeEl = document.getElementById('scrape-urls-input');
     if (scrapeEl) scrapeEl.value = data.scrape_urls || 'https://www.tekstack.com';
+    // Apply admin title to sidebar
+    applyAdminBranding(data);
   }
+
+  function applyAdminBranding(data) {
+    const titleEl = document.getElementById('sidebar-logo');
+    if (titleEl && data.admin_title) {
+      const parts = data.admin_title.split(' ');
+      const last = parts.pop();
+      titleEl.innerHTML = parts.join(' ') + (parts.length ? ' ' : '') + `<span>${last}</span>`;
+    }
+    document.title = (data.admin_title || 'Max Admin') + ' — Dashboard';
+  }
+
+  // Sync color picker ↔ hex input
+  document.addEventListener('DOMContentLoaded', () => {
+    const picker = document.getElementById('settings-primary-color');
+    const hex = document.getElementById('settings-primary-color-hex');
+    if (picker && hex) {
+      picker.addEventListener('input', () => { hex.value = picker.value; });
+      hex.addEventListener('input', () => {
+        if (/^#[0-9a-fA-F]{6}$/.test(hex.value)) picker.value = hex.value;
+      });
+    }
+  });
 
   async function saveSettings() {
     const agentName = document.getElementById('settings-agent-name').value.trim();
+    const companyName = document.getElementById('settings-company-name').value.trim();
+    const adminTitle = document.getElementById('settings-admin-title').value.trim();
     const timerFirst = document.getElementById('settings-timer-first').value.trim();
     const bookingUrl = document.getElementById('settings-booking-url').value.trim();
+    const hexInput = document.getElementById('settings-primary-color-hex').value.trim();
+    const colorPicker = document.getElementById('settings-primary-color').value;
+    const primaryColor = /^#[0-9a-fA-F]{6}$/.test(hexInput) ? hexInput : colorPicker;
 
-    const body = {};
+    const body = {
+      booking_url: bookingUrl,
+      primary_color: primaryColor,
+    };
     if (agentName) body.agent_name = agentName;
+    if (companyName) body.company_name = companyName;
+    if (adminTitle) body.admin_title = adminTitle;
     if (timerFirst !== '') body.timer_first_page = timerFirst;
-    body.booking_url = bookingUrl;
 
     await apiFetch('/api/settings', { method: 'PATCH', body: JSON.stringify(body) });
+    applyAdminBranding({ admin_title: adminTitle || 'Max Admin' });
     const msg = document.getElementById('settings-saved-msg');
     msg.style.display = 'inline';
     setTimeout(() => { msg.style.display = 'none'; }, 3000);

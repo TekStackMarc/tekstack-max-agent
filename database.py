@@ -98,6 +98,18 @@ async def init_db():
             "INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)",
             ("scrape_urls", "https://www.tekstack.com")
         )
+        await db.execute(
+            "INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)",
+            ("primary_color", "#0052cc")
+        )
+        await db.execute(
+            "INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)",
+            ("company_name", "TekStack")
+        )
+        await db.execute(
+            "INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)",
+            ("admin_title", "Max Admin")
+        )
 
         await db.commit()
 
@@ -178,6 +190,9 @@ async def get_settings(db) -> dict:
         "booking_url": "https://outlook.office.com/book/TekStackMeeting@tekstack.com/?ismsaljsauthenabled",
         "agent_name": "Max",
         "scrape_urls": "https://www.tekstack.com",
+        "primary_color": "#0052cc",
+        "company_name": "TekStack",
+        "admin_title": "Max Admin",
     }
     result = dict(defaults)
     for key, value in rows:

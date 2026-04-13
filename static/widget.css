@@ -1,5 +1,11 @@
 @import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&display=swap');
 
+/* Brand colors — overridden at runtime by widget.js from /api/config */
+:root {
+  --max-primary: #0052cc;
+  --max-primary-shadow: rgba(0, 82, 204, 0.4);
+}
+
 /* Flash prevention — hide before JS initializes */
 #max-window { display: none; }
 
@@ -19,8 +25,8 @@
   width: 60px;
   height: 60px;
   border-radius: 50%;
-  background: linear-gradient(135deg, #0052cc 0%, #0073e6 100%);
-  box-shadow: 0 4px 20px rgba(0, 82, 204, 0.4);
+  background: var(--max-primary);
+  box-shadow: 0 4px 20px var(--max-primary-shadow);
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -28,9 +34,9 @@
   z-index: 99998;
   border: none;
   outline: none;
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  transition: transform 0.2s ease, box-shadow 0.2s ease, filter 0.2s ease;
 }
-#max-launcher:hover { transform: scale(1.08); box-shadow: 0 6px 24px rgba(0,82,204,0.5); }
+#max-launcher:hover { transform: scale(1.08); filter: brightness(1.12); }
 #max-launcher svg { transition: opacity 0.2s ease, transform 0.2s ease; }
 #max-launcher.open svg.icon-chat { opacity: 0; transform: scale(0.7); position: absolute; }
 #max-launcher.open svg.icon-close { opacity: 1; transform: scale(1); }
@@ -69,7 +75,7 @@
 
 /* ── Header ── */
 #max-header {
-  background: linear-gradient(135deg, #0052cc 0%, #0073e6 100%);
+  background: var(--max-primary);
   padding: 16px 20px;
   display: flex; align-items: center; gap: 12px; flex-shrink: 0;
 }
@@ -115,7 +121,7 @@
   font-weight: 400;
   padding: 2px 0;
 }
-.max-msg.user .max-bubble { color: #0052cc; }
+.max-msg.user .max-bubble { color: var(--max-primary); }
 .max-msg.assistant .max-bubble { color: #1a1a1a; }
 
 /* ── Typing indicator ── */
@@ -154,7 +160,7 @@
 }
 #max-booking-btn {
   padding: 10px 16px;
-  background: #0052cc;
+  background: var(--max-primary);
   color: white;
   border: none;
   border-radius: 8px;
@@ -165,9 +171,9 @@
   text-align: center;
   text-decoration: none;
   display: inline-block;
-  transition: background 0.15s;
+  transition: filter 0.15s;
 }
-#max-booking-btn:hover { background: #0041a8; }
+#max-booking-btn:hover { filter: brightness(0.88); }
 
 /* ── Input Bar ── */
 #max-input-bar {
@@ -185,18 +191,18 @@
   font-family: 'Montserrat', sans-serif;
   font-weight: 400;
 }
-#max-input:focus { border-color: #0052cc; background: white; }
+#max-input:focus { border-color: var(--max-primary); background: white; }
 #max-input::placeholder { color: #9ca3af; }
 
 #max-send {
   width: 38px; height: 38px; border-radius: 50%;
-  background: #0052cc; border: none; cursor: pointer;
+  background: var(--max-primary); border: none; cursor: pointer;
   display: flex; align-items: center; justify-content: center;
-  flex-shrink: 0; transition: background 0.15s, transform 0.1s;
+  flex-shrink: 0; transition: filter 0.15s, transform 0.1s;
 }
-#max-send:hover { background: #0041a8; }
+#max-send:hover { filter: brightness(0.88); }
 #max-send:active { transform: scale(0.93); }
-#max-send:disabled { background: #9ca3af; cursor: not-allowed; }
+#max-send:disabled { background: #9ca3af; cursor: not-allowed; filter: none; }
 
 /* ── Footer ── */
 #max-footer {

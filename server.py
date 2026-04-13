@@ -78,6 +78,9 @@ class SettingsPatch(BaseModel):
     booking_url: str | None = None
     agent_name: str | None = None
     scrape_urls: str | None = None
+    primary_color: str | None = None
+    company_name: str | None = None
+    admin_title: str | None = None
 
 
 class TrackRequest(BaseModel):
@@ -232,13 +235,15 @@ async def get_config():
     try:
         settings = await db.get_settings(conn)
         raw_timer = int(settings.get("timer_first_page", 20))
-        # Treat 0 or negative as default 20s (prevents instant open from accidental 0)
         timer = raw_timer if raw_timer > 0 else 20
         return {
             "timer_first_page": timer,
             "timer_second_page": int(settings.get("timer_second_page", 10)),
             "booking_url": settings.get("booking_url", ""),
             "agent_name": settings.get("agent_name", "Max"),
+            "primary_color": settings.get("primary_color", "#0052cc"),
+            "company_name": settings.get("company_name", "TekStack"),
+            "admin_title": settings.get("admin_title", "Max Admin"),
         }
     finally:
         await conn.close()
@@ -285,6 +290,12 @@ async def update_settings(req: SettingsPatch, request: Request, _=Depends(verify
             await db.set_setting(conn, "agent_name", req.agent_name)
         if req.scrape_urls is not None:
             await db.set_setting(conn, "scrape_urls", req.scrape_urls)
+        if req.primary_color is not None:
+            await db.set_setting(conn, "primary_color", req.primary_color)
+        if req.company_name is not None:
+            await db.set_setting(conn, "company_name", req.company_name)
+        if req.admin_title is not None:
+            await db.set_setting(conn, "admin_title", req.admin_title)
         return {"status": "ok"}
     finally:
         await conn.close()
