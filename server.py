@@ -118,13 +118,38 @@ Then continue with a short friendly message like "Here's a link to book directly
 """
 
 
-async def build_system_prompt(conn) -> str:
-    knowledge = await db.get_active_knowledge(conn)
+MAX_KNOWLEDGE_CHARS = 12_000  # ~3,000 tokens — stays well under rate limits
+
+
+def _score_entry(entry: dict, query_words: set) -> int:
+    """Simple keyword overlap score between knowledge entry and user query."""
+    text = (entry["title"] + " " + entry["content"]).lower()
+    return sum(1 for w in query_words if w in text)
+
+
+async def build_system_prompt(conn, user_message: str = "") -> str:
+    all_entries = await db.get_active_knowledge_list(conn)
     overrides = await db.get_active_training_overrides(conn)
 
+    # Score entries by relevance to the current user message
+    if user_message and all_entries:
+        # Strip common stop words so we match on meaningful terms
+        stop = {"the","a","an","is","are","was","i","my","do","does","what","how",
+                "can","could","would","will","to","of","in","it","and","or","for"}
+        query_words = {w for w in user_message.lower().split() if w not in stop and len(w) > 2}
+        all_entries.sort(key=lambda e: _score_entry(e, query_words), reverse=True)
+
+    # Build knowledge string up to the character cap
+    knowledge_str = ""
+    for entry in all_entries:
+        chunk = f"\n\n## {entry['title']}\n{entry['content']}" if entry["title"] else f"\n\n{entry['content']}"
+        if len(knowledge_str) + len(chunk) > MAX_KNOWLEDGE_CHARS:
+            break
+        knowledge_str += chunk
+
     prompt = PERSONA
-    if knowledge:
-        prompt += knowledge
+    if knowledge_str:
+        prompt += knowledge_str
     else:
         prompt += "(Knowledge base is being built — use general knowledge about TekStack from tekstack.com)"
 
@@ -145,7 +170,7 @@ async def stream_chat(chat: ChatRequest) -> AsyncGenerator[str, None]:
         history = await db.get_conversation_messages(conn, chat.conversation_id)
         await db.save_message(conn, chat.conversation_id, "user", chat.message)
 
-        system_prompt = await build_system_prompt(conn)
+        system_prompt = await build_system_prompt(conn, chat.message)
         messages = history + [{"role": "user", "content": chat.message}]
 
         full_response = ""

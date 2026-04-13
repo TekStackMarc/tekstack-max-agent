@@ -152,6 +152,15 @@ async def get_active_knowledge(db) -> str:
     return "\n\n".join(parts)
 
 
+async def get_active_knowledge_list(db) -> list[dict]:
+    """Return knowledge entries as a list of dicts for relevance filtering."""
+    async with db.execute(
+        "SELECT id, title, content, url FROM knowledge_entries WHERE active = 1 ORDER BY created_at ASC"
+    ) as cursor:
+        rows = await cursor.fetchall()
+    return [{"id": r[0], "title": r[1] or "", "content": r[2], "url": r[3] or ""} for r in rows]
+
+
 async def get_active_training_overrides(db) -> list[dict]:
     async with db.execute(
         "SELECT question_pattern, preferred_response FROM training_overrides WHERE active = 1"
