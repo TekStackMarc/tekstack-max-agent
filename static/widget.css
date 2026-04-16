@@ -211,8 +211,7 @@
   font-weight: 400;
 }
 
-/* ── Mobile ── */
-@media (max-width: 440px) {
-  #max-window { width: 100vw; height: 100dvh; bottom: 0; right: 0; border-radius: 0; }
-  #max-launcher { bottom: 16px; right: 16px; }
+/* ── Mobile — hide widget entirely on small screens ── */
+@media (max-width: 768px) {
+  #max-widget-root { display: none !important; }
 }
