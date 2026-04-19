@@ -36,6 +36,34 @@
     });
   }
 
+  // ── HTML escape ──
+  // Used before markdown-link rendering so user/bot text can't inject HTML.
+  function escapeHtml(str) {
+    return String(str)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  }
+
+  // ── Render markdown-style links ──
+  // Converts [anchor](https://...) into a safe <a> tag and escapes everything else.
+  // Only http(s) URLs are allowed — anything else is left as literal text.
+  function renderMarkdownLinks(text) {
+    const escaped = escapeHtml(text);
+    // Match [text](url) where url starts with http:// or https://
+    return escaped.replace(
+      /\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g,
+      function (_match, anchor, url) {
+        // The anchor and url are already HTML-escaped (we escaped the whole
+        // string first), so they're safe to interpolate directly.
+        return '<a class="max-link" href="' + url +
+               '" target="_blank" rel="noopener noreferrer">' + anchor + '</a>';
+      }
+    );
+  }
+
   // ── Flash prevention ──
   // Hide the entire widget root until CSS is loaded, then let CSS take over
   function injectCriticalStyle() {
@@ -130,7 +158,12 @@
     msgDiv.className = 'max-msg ' + role;
     const bubble = document.createElement('div');
     bubble.className = 'max-bubble';
-    bubble.textContent = text;
+    // User messages stay as plain text. Assistant messages get markdown links rendered.
+    if (role === 'assistant') {
+      bubble.innerHTML = renderMarkdownLinks(text);
+    } else {
+      bubble.textContent = text;
+    }
     msgDiv.appendChild(bubble);
     container.appendChild(msgDiv);
     scrollToBottom();
@@ -286,6 +319,7 @@
           container.appendChild(msgDiv);
         }
         currentBubbleText += event.content;
+        // Show plain text while streaming (prevents half-rendered markdown flicker)
         currentBubble.textContent = currentBubbleText;
         scrollToBottom();
         break;
@@ -293,6 +327,11 @@
         bookingPending = true;
         break;
       case 'done':
+        // Re-render the final message with markdown links enabled
+        if (currentBubble && currentBubbleText) {
+          currentBubble.innerHTML = renderMarkdownLinks(currentBubbleText);
+          scrollToBottom();
+        }
         finishStreaming();
         break;
       case 'error':
